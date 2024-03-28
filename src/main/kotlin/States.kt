@@ -1,7 +1,7 @@
 enum class States {
     RUNNING {
         override fun nextStates(): Set<States> {
-            return setOf(SUSPENDED, READY, WAITING)
+            return setOf(SUSPENDED, READY, WAIT)
         }
     },
     SUSPENDED {
@@ -14,7 +14,7 @@ enum class States {
             return setOf(RUNNING)
         }
     },
-    WAITING {
+    WAIT {
         override fun nextStates(): Set<States> {
             return setOf(READY)
         }
