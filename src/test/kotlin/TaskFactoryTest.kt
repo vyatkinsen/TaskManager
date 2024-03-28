@@ -1,3 +1,5 @@
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.example.Task
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -5,10 +7,10 @@ import kotlin.test.assertEquals
 /**
  * Интеграционный тест
  */
-class PlannerTest {
+class TaskFactoryTest {
 
     @Test
-    fun shouldCompleteAllTaskInRightOrder() {
+    fun shouldCompleteAllTaskInRightOrder() = runBlocking {
         val t1 = Task.of(Priority.LOW, 150)
         val t2 = ExtendedTask.of(Priority.LOWEST, 250, 100, 200)
         val t3 = Task.of(Priority.HIGH, 300)
@@ -18,16 +20,15 @@ class PlannerTest {
 
         val tasksToComplete = listOf(t1, t2, t3, t4, t5, t6)
 
-        val planner = Planner()
-        val executorService = java.util.concurrent.Executors.newSingleThreadExecutor()
-        executorService.execute(planner)
+        val taskFactory = TaskFactory()
+        launch { taskFactory.run() }
 
         for (t in tasksToComplete) {
-            planner.addTask(t)
+            taskFactory.addTask(t)
             Thread.sleep(100L)
         }
         Thread.sleep(2000L)
 
-        assertEquals(planner.getCompletedTasks(), listOf(t1, t3, t5, t4, t6, t2))
+        assertEquals(listOf(t1, t3, t5, t4, t6, t2), taskFactory.getCompletedTasks())
     }
 }

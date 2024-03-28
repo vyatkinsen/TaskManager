@@ -1,15 +1,18 @@
 import TaskGenerator.createRandomTask
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Executors
 
-object Main {
-    fun main(args: Array<String>) {
-        val planner = Planner()
-        val executorService = Executors.newSingleThreadExecutor()
-        executorService.execute(planner)
-
+fun main(): Unit = runBlocking {
+    val taskFactory = TaskFactory()
+    launch {
         while (true) {
-            planner.addTask(createRandomTask())
-            Thread.sleep(1100L)
+            taskFactory.addTask(createRandomTask())
+            delay(1100L)
         }
     }
+    launch { taskFactory.run() }
 }
+

@@ -13,6 +13,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     implementation("org.apache.logging.log4j:log4j-slf4j2-impl:2.20.0")
     implementation ("org.apache.commons:commons-lang3:3.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1-Beta")
 }
 
 tasks.test {

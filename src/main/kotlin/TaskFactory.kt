@@ -1,15 +1,17 @@
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import org.example.Task
 import org.slf4j.LoggerFactory
 import java.util.concurrent.*
 
-class Planner : Runnable {
+class TaskFactory {
     private var isRunning = false
     private var currentTask: Task? = null
     private val logger = LoggerFactory.getLogger(javaClass.name)
 
-    private var future: Future<Task>? = null
-
-    private val mainTaskExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var deferred: Deferred<Task>? = null
 
     /**
      * Реализует все очереди вместе, поскольку сам сортирует элементы по приоритету при добавлении
@@ -19,27 +21,31 @@ class Planner : Runnable {
     private val completedTasks: MutableList<Task> = ArrayList()
 
 
-    override fun run() {
-        if (!isRunning) {
-            // запуск процесса на просматривание готовых задач
-            isRunning = true
-            while (isRunning) {
-                currentTask = queue.take()
-                logger.atInfo().log(currentTask.toString() + " WANT TO EXECUTE")
-                future = mainTaskExecutor.submit(currentTask!!)
-                try {
-                    val endedTask = (future as Future<Task>).get()
+    suspend fun run() {
+        coroutineScope {
+            if (!isRunning) {
+                // запуск процесса на просматривание готовых задач
+                isRunning = true
+                while (isRunning) {
+                    val task = queue.take() ?: throw RuntimeException("no task")
+                    currentTask = task
 
-                    if (endedTask.currentState == States.WAIT) {
-                        CompletableFuture.supplyAsync { currentTask!!.waitSomething() }
-                            .thenAccept { task: Task -> this.addTask(task) }
-                    } else {
-                        completedTasks.add(endedTask)
+                    logger.atInfo().log("$task WANT TO EXECUTE")
+
+                    deferred = async { task.call() }
+                    try {
+                        val endedTask = deferred!!.await()
+
+                        if (endedTask.currentState == States.WAIT) {
+                            launch { task.waitSomething() }.invokeOnCompletion {
+                                this@TaskFactory.addTask(task)
+                            }
+                        } else {
+                            completedTasks.add(endedTask)
+                        }
+                    } catch (c: CancellationException) {
+                        queue.add(task) // случай прерывания текущей задачи до завершения
                     }
-                } catch (E: InterruptedException) {
-                } catch (E: ExecutionException) {
-                } catch (c: CancellationException) {
-                    queue.add(currentTask!!) // случай прерывания текущей задачи до завершения
                 }
             }
         }
@@ -62,7 +68,7 @@ class Planner : Runnable {
                  */
                 if (currentTask != null && task.comparePriority(currentTask!!) < 0 && queue.remainingCapacity() >= 1) {
                     logger.atInfo().log("WANT INTERRUPT $currentTask TO EXECUTE $task")
-                    future!!.cancel(true)
+                    deferred!!.cancel()
                 }
             } else {
                 logger.atInfo().log("PLANNER CANT ADD $task NOT ENOUGH SPACE")
