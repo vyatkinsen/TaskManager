@@ -19,7 +19,7 @@ class Scheduler(
             tryEmit(null)
         }
 
-    private val waitScope = Executors.newSingleThreadExecutor()
+    private val waitScope = Executors.newCachedThreadPool()
 
     private val isProcessingAllowedFlow = MutableStateFlow(true)
 
@@ -46,21 +46,21 @@ class Scheduler(
                 "Finished processing task:$newProcessTask, state:$state, ${mq.queueStateFlow.first().toColoredString()}"
             )
 
-            if (newProcessTask.state == SUSPENDED) {
+            if (state == SUSPENDED) {
                 logger.atInfo().log("Terminating last processed task:[$newProcessTask], currentJob = $currentTaskFlow")
+                currentTaskFlow.emit(null)
                 mq.terminateTask(newProcessTask)
             } else if (state == WAITING) {
                 logger.atInfo().log("Handling WAITING state on task:$newProcessTask")
                 waitScope.execute {
                     runBlocking {
                         (newProcessTask as ExtendedTask).wait {
-                            logger.atInfo()
-                                .log("Task: $it changed state, ${mq.queueStateFlow.first().toColoredString()}")
+                            logger.atInfo().log("Task: $it changed state, ${mq.queueStateFlow.first().toColoredString()}")
                         }
                     }
                     logger.atInfo().log("Wait for task:$newProcessTask completed")
-                    highestPriorityTaskFlow.value = null
 
+                    highestPriorityTaskFlow.value = null // to update with onRelease action
                     mq.onTaskRelease(newProcessTask)
                 }
                 logger.atInfo().log("Current task is now null")
@@ -72,9 +72,6 @@ class Scheduler(
                 highestPriorityTaskFlow.value = nextTask
             }
         }
-
-        println("COLLECT COMPLETED")
-
     }
 
     private suspend fun consumeQueueUpdates() {
@@ -109,11 +106,8 @@ class Scheduler(
     ) = processor.process(
         task = task,
         isProcessingAllowedFlow = isProcessingAllowedFlow.asStateFlow(),
-        onWaitComplete = {
-
-        },
         onTaskStateChange = {
-
+            logger.atInfo().log("Task: $it changed state, ${mq.queueStateFlow.first().toColoredString()}")
         }
     )
 
@@ -127,8 +121,10 @@ class Scheduler(
     }
 
     private fun MessageQueue.QueuePool.getHighestPriorityTaskOrNull() =
-        highQueue.firstOrNull { it.state == SUSPENDED || it.state == READY }
-            ?: midQueue.firstOrNull { it.state == SUSPENDED || it.state == READY }
-            ?: lowQueue.firstOrNull { it.state == SUSPENDED || it.state == READY }
-            ?: lowestQueue.firstOrNull { it.state == SUSPENDED || it.state == READY }
+        highQueue.firstOrNull { it.canBeProcessed() }
+            ?: midQueue.firstOrNull { it.canBeProcessed() }
+            ?: lowQueue.firstOrNull { it.canBeProcessed() }
+            ?: lowestQueue.firstOrNull { it.canBeProcessed() }
+
+    private fun Task.canBeProcessed() = (state == SUSPENDED || state == READY) && processedTime < timeToProcess
 }

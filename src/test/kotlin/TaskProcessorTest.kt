@@ -55,9 +55,6 @@ class TaskProcessorTest {
             processor.process(
                 task,
                 noInterruptionsFlow,
-                onWaitComplete = {
-                    hasWaited = true
-                }
             )
         }
         delay(50)

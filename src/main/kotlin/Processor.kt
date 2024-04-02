@@ -1,11 +1,11 @@
-import kotlinx.coroutines.flow.StateFlow
-import org.slf4j.LoggerFactory
 import LogicExceptionType.TASK_CANNOT_BE_PROCESSED
 import Task.Action.*
-import Task.State.*
 import Task.State
-import com.sun.jdi.event.MonitorWaitEvent
-import kotlinx.coroutines.*
+import Task.State.READY
+import Task.State.WAITING
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
+import org.slf4j.LoggerFactory
 
 class TaskProcessor {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -13,7 +13,6 @@ class TaskProcessor {
     suspend fun process(
         task: Task,
         isProcessingAllowedFlow: StateFlow<Boolean>,
-        onWaitComplete: (task: Task) -> Unit,
         onTaskStateChange: suspend (task: Task) -> Unit = {}
     ): State {
         task.requireReadyState()
@@ -24,6 +23,15 @@ class TaskProcessor {
             return WAITING
         }
 
+        return runTaskAndGetState(task, isProcessingAllowedFlow)
+    }
+
+    private fun Task.onStartProcessing() {
+        logger.atInfo().log("Start processing task: $this")
+        this.tryMakeAction(START)
+    }
+
+    private suspend fun runTaskAndGetState(task: Task, isProcessingAllowedFlow: StateFlow<Boolean>): State {
         var processTime = 0L
         while (task.processedTime + processTime < task.timeToProcess) {
             if (!isProcessingAllowedFlow.value) {
@@ -33,18 +41,16 @@ class TaskProcessor {
             processTime++
             delay(1)
         }
+
         handleFinishProcess(task, processTime)
         return task.state
     }
 
-    private fun Task.onStartProcessing() {
-        logger.atInfo().log("Start processing task: $this")
-        this.tryMakeAction(START)
-    }
-
     private fun Task.requireReadyState() {
         if (this.state != READY) {
-            throw LogicException("Task UUID:${this.uuid} is not in READY state", TASK_CANNOT_BE_PROCESSED).withLog(logger)
+            throw LogicException("Task UUID:${this.uuid} is not in READY state", TASK_CANNOT_BE_PROCESSED).withLog(
+                logger
+            )
         }
     }
 

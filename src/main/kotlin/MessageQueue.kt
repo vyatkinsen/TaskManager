@@ -3,7 +3,8 @@ import LogicExceptionType.TASK_NOT_VALID
 import Priority.*
 import Task.State.*
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.awt.Color
@@ -25,7 +26,8 @@ class MessageQueue {
         ArrayDeque(),
         ArrayDeque()
     )
-    private val _queueStateFlow = MutableSharedFlow<QueuePool>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private val _queueStateFlow =
+        MutableSharedFlow<QueuePool>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val queueStateFlow = _queueStateFlow.asSharedFlow()
 
 
@@ -48,11 +50,11 @@ class MessageQueue {
     fun terminateTask(task: Task) {
         synchronized(lock) {
             val priority = taskToPriorityMap[task.uuid]
-                ?: throw LogicException("Task not found", TASK_NOT_FOUND).withLog(logger)
+                ?: throw LogicException("Task UUID:${task.uuid} not found", TASK_NOT_FOUND).withLog(logger)
             getQueueByPriority(priority).terminateTask(task)
             runBlocking { _queueStateFlow.emit(state) }
             logger.atInfo().log(
-                "Removed task, uuid:${task.uuid}, priority:$priority, ${state.toColoredString()}"
+                "Removed task, UUID:${task.uuid}, PRIORITY:$priority, ${state.toColoredString()}"
             )
         }
     }
@@ -64,12 +66,10 @@ class MessageQueue {
             getQueueByPriority(priority).terminateTask(task).addLast(task)
             runBlocking { _queueStateFlow.emit(state) }
             logger.atInfo().log(
-                "Released task with uuid:${task.uuid}, priority:$priority, ${state.toColoredString()}"
+                "Released task UUID:${task.uuid}, PRIORITY:$priority, ${state.toColoredString()}"
             )
         }
     }
-
-    fun onStartWaitEvent() = runBlocking { _queueStateFlow.emit(state) }
 
     private fun getQueueByPriority(priority: Priority) = when (priority) {
         LOWEST -> state.lowestQueue
