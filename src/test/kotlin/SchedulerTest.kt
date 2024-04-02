@@ -7,7 +7,7 @@ class SchedulerTest {
     @Test
     fun `run`(): Unit = runBlocking {
         val mq = MessageQueue()
-        val taskProducer = TaskProducer(mq)
+        val taskProducer = TaskProducer(mq, activeCycles = 2)
         val taskProcessor = TaskProcessor()
         val scheduler = Scheduler(mq, taskProcessor)
 
@@ -16,9 +16,15 @@ class SchedulerTest {
         }
 
         launch {
-            mq.addTask(Task(generateUuid()), Priority.LOWEST)
-            mq.addTask(Task(generateUuid()), Priority.LOW)
-            mq.addTask(ExtendedTask(generateUuid(), waitTime = 100), Priority.HIGH)
+//            mq.addTask(Task(generateUuid(), timeToProcess = 1000), Priority.LOWEST)
+//            delay(100)
+//            mq.addTask(Task(generateUuid(), timeToProcess = 1000), Priority.LOW)
+//            delay(100)
+            mq.addTask(ExtendedTask(generateUuid(), waitTime = 2000, timeToProcess = 1000), Priority.HIGH)
+            delay(100)
+            mq.addTask(ExtendedTask(generateUuid(), waitTime = 1000, timeToProcess = 1000), Priority.HIGH)
+
+//            taskProducer.generateTasks()
         }
     }
 }

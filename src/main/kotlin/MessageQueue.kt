@@ -2,7 +2,9 @@ import LogicExceptionType.TASK_NOT_FOUND
 import LogicExceptionType.TASK_NOT_VALID
 import Priority.*
 import Task.State.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.awt.Color
 
@@ -17,147 +19,63 @@ class MessageQueue {
 
     private val lock = Any()
 
-    private val _queueStateFlow = MutableStateFlow(
-        QueuePool(
-            ArrayDeque(),
-            ArrayDeque(),
-            ArrayDeque(),
-            ArrayDeque()
-        )
+    private val state = QueuePool(
+        ArrayDeque(),
+        ArrayDeque(),
+        ArrayDeque(),
+        ArrayDeque()
     )
-    val queueStateFlow = _queueStateFlow.asStateFlow()
+    private val _queueStateFlow = MutableSharedFlow<QueuePool>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val queueStateFlow = _queueStateFlow.asSharedFlow()
 
-    private val _queueSharedFlow = MutableSharedFlow<QueuePool>()
-    val queueSharedFlow = _queueStateFlow.asSharedFlow()
 
     init {
-        logger.atInfo().log(queueStateFlow.value.toColoredString())
+        logger.atInfo().log(state.toColoredString())
     }
 
-    fun addTask(task: Task, priority: Priority) {
+    suspend fun addTask(task: Task, priority: Priority) {
         synchronized(lock) {
-            val stateSnapshot = queueStateFlow.value
             taskToPriorityMap[task.uuid] = priority
+            getQueueByPriority(priority).addLast(task)
+            runBlocking { _queueStateFlow.emit(state) }
 
-            when (priority) {
-                LOWEST -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowestQueue = stateSnapshot.lowestQueue.withAddedTask(task)
-                    )
-                }
-
-                LOW -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowQueue = stateSnapshot.lowQueue.withAddedTask(task)
-                    )
-                }
-
-                MID -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        midQueue = stateSnapshot.midQueue.withAddedTask(task)
-                    )
-                }
-
-                HIGH -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        highQueue = stateSnapshot.highQueue.withAddedTask(task)
-                    )
-                }
-            }
             logger.atInfo().log(
-                "Added new task, uuid:${task.uuid}, priority:$priority, ${queueStateFlow.value.toColoredString()}"
+                "Added new task, uuid:${task.uuid}, priority:$priority, ${state.toColoredString()}"
             )
         }
     }
 
     fun terminateTask(task: Task) {
-        val priority = taskToPriorityMap[task.uuid]
-            ?: throw LogicException("Task not found", TASK_NOT_FOUND).withLog(logger)
-
         synchronized(lock) {
-            val stateSnapshot = queueStateFlow.value
-            when (priority) {
-                LOWEST -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowestQueue = stateSnapshot.lowestQueue.withFirstTaskTerminated(task)
-                    )
-                }
-
-                LOW -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowQueue = stateSnapshot.lowQueue.withFirstTaskTerminated(task)
-                    )
-                }
-
-                MID -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        midQueue = stateSnapshot.midQueue.withFirstTaskTerminated(task)
-                    )
-                }
-
-                HIGH -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        highQueue = stateSnapshot.highQueue.withFirstTaskTerminated(task)
-                    )
-                }
-            }
+            val priority = taskToPriorityMap[task.uuid]
+                ?: throw LogicException("Task not found", TASK_NOT_FOUND).withLog(logger)
+            getQueueByPriority(priority).terminateTask(task)
+            runBlocking { _queueStateFlow.emit(state) }
             logger.atInfo().log(
-                "Removed task, uuid:${task.uuid}, priority:$priority, ${queueStateFlow.value.toColoredString()}"
+                "Removed task, uuid:${task.uuid}, priority:$priority, ${state.toColoredString()}"
             )
         }
     }
 
     fun onTaskRelease(task: Task) {
-        val priority = taskToPriorityMap[task.uuid]
-            ?: throw LogicException("Task not found", TASK_NOT_FOUND).withLog(logger)
-
         synchronized(lock) {
-            val stateSnapshot = queueStateFlow.value
-            when (priority) {
-                LOWEST -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowestQueue = stateSnapshot.lowestQueue.withFirstTaskTerminated(task)
-                    )
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowestQueue = stateSnapshot.lowestQueue.withAddedTask(task)
-                    )
-                }
-
-                LOW -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowQueue = stateSnapshot.lowQueue.withFirstTaskTerminated(task)
-                    )
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        lowQueue = stateSnapshot.lowQueue.withAddedTask(task)
-                    )
-                }
-
-                MID -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        midQueue = stateSnapshot.midQueue.withFirstTaskTerminated(task)
-                    )
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        midQueue = stateSnapshot.midQueue.withAddedTask(task)
-                    )
-                }
-
-                HIGH -> {
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        highQueue = stateSnapshot.highQueue.withFirstTaskTerminated(task)
-                    )
-                    _queueStateFlow.value = stateSnapshot.copy(
-                        highQueue = stateSnapshot.highQueue.withAddedTask(task)
-                    )
-                }
-            }
+            val priority = taskToPriorityMap[task.uuid]
+                ?: throw LogicException("Task not found", TASK_NOT_FOUND).withLog(logger)
+            getQueueByPriority(priority).terminateTask(task).addLast(task)
+            runBlocking { _queueStateFlow.emit(state) }
             logger.atInfo().log(
-                "Released task with uuid:${task.uuid}, priority:$priority, ${queueStateFlow.value.toColoredString()}"
+                "Released task with uuid:${task.uuid}, priority:$priority, ${state.toColoredString()}"
             )
         }
     }
 
-    private fun a() {
+    fun onStartWaitEvent() = runBlocking { _queueStateFlow.emit(state) }
 
+    private fun getQueueByPriority(priority: Priority) = when (priority) {
+        LOWEST -> state.lowestQueue
+        LOW -> state.lowQueue
+        MID -> state.midQueue
+        HIGH -> state.highQueue
     }
 
     private fun ArrayDeque<Task>.withAddedTask(task: Task) =
@@ -167,17 +85,16 @@ class MessageQueue {
         }
 
 
-    private fun ArrayDeque<Task>.withFirstTaskTerminated(task: Task) =
-        ArrayDeque<Task>().apply {
-            addAll(this@withFirstTaskTerminated)
-            if (task != firstOrNull()) throw LogicException(
-                "Task ${task.uuid} is not first in the queue",
-                TASK_NOT_VALID
-            )
+    private fun ArrayDeque<Task>.terminateTask(task: Task) = this.apply {
 
-            removeFirst()
-            _completedTasks.add(task)
-        }
+
+        val result = remove(task)
+        if (!result) throw LogicException(
+            "Task ${task.uuid} could not be removed",
+            TASK_NOT_VALID
+        )
+        _completedTasks.add(task)
+    }
 
     private fun ArrayDeque<Task>.withTaskReleased(task: Task) = ArrayDeque<Task>().apply {
         addAll(this@withTaskReleased)

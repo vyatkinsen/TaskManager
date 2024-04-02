@@ -1,3 +1,4 @@
+import Task.State.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -6,7 +7,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
-import Task.State.*
 import task.getExtendedTaskInReadyState
 import task.getTaskInReadyState
 import task.getTaskInRunningState
@@ -51,10 +51,16 @@ class TaskProcessorTest {
         assertEquals(0, task.processedTime)
         var hasWaited = false
 
-        launch { processor.process(task, noInterruptionsFlow, {}) {
-            hasWaited = true
-        } }
-        delay(10)
+        launch {
+            processor.process(
+                task,
+                noInterruptionsFlow,
+                onWaitComplete = {
+                    hasWaited = true
+                }
+            )
+        }
+        delay(50)
 
         assertEquals(WAITING, task.state)
         assertEquals(0, task.processedTime)

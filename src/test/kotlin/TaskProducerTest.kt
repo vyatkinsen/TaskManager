@@ -1,4 +1,6 @@
 import MessageQueue.QueuePool
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.lang.System.currentTimeMillis
@@ -18,7 +20,7 @@ class TaskProducerTest {
         job.join()
 
         //then
-        val state = mq.queueStateFlow.value
+        val state = mq.queueStateFlow.first()
         val (simpleTasksCount, extendedTaskWithoutWaitCount, extendedTaskWithWaitCount) = getQueuePoolStats(state)
         assertEquals(cycleCount, simpleTasksCount)
         assertEquals(cycleCount, extendedTaskWithoutWaitCount)

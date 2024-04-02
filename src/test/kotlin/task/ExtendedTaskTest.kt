@@ -18,7 +18,7 @@ class ExtendedTaskTransitionTest {
 
         // when
         runBlocking {
-            launch { task.wait() }
+            launch { task.wait {} }
             launch {
                 delay(1)
                 assertEquals(WAITING, task.state)

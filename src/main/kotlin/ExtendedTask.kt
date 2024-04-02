@@ -25,10 +25,11 @@ class ExtendedTask(
         }
     }
 
-    suspend fun wait() {
+    suspend fun wait(beforeDelay: suspend (task: Task) -> Unit) {
         if (waitTime == null) throw LogicException("Cannot wait without waitTime", WAIT_IS_NOT_ALLOWED).withLog(logger)
 
         tryMakeExtendedAction(WAIT)
+        beforeDelay(this)
         logger.atInfo().log("Task:$this is waiting $waitTime ms")
         delay(waitTime)
         _isWaitCompleted = true

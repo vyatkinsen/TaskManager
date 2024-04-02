@@ -4,6 +4,7 @@ import LogicExceptionType.TASK_CANNOT_BE_PROCESSED
 import Task.Action.*
 import Task.State.*
 import Task.State
+import com.sun.jdi.event.MonitorWaitEvent
 import kotlinx.coroutines.*
 
 class TaskProcessor {
@@ -13,18 +14,13 @@ class TaskProcessor {
         task: Task,
         isProcessingAllowedFlow: StateFlow<Boolean>,
         onWaitComplete: (task: Task) -> Unit,
-        onTaskStateChange: (task: Task) -> Unit = {}
+        onTaskStateChange: suspend (task: Task) -> Unit = {}
     ): State {
         task.requireReadyState()
         task.onStartProcessing()
         onTaskStateChange(task)
 
         if (task is ExtendedTask && task.waitTime != null && !task.isWaitCompleted) {
-            withContext(Dispatchers.Default) {
-                launch { task.wait() }
-            }.invokeOnCompletion {
-                onWaitComplete(task)
-            }
             return WAITING
         }
 
@@ -48,7 +44,7 @@ class TaskProcessor {
 
     private fun Task.requireReadyState() {
         if (this.state != READY) {
-            throw LogicException("Task is not in READY state", TASK_CANNOT_BE_PROCESSED).withLog(logger)
+            throw LogicException("Task UUID:${this.uuid} is not in READY state", TASK_CANNOT_BE_PROCESSED).withLog(logger)
         }
     }
 
