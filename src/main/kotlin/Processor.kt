@@ -1,12 +1,10 @@
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import LogicExceptionType.TASK_CANNOT_BE_PROCESSED
 import Task.Action.*
 import Task.State.*
 import Task.State
+import kotlinx.coroutines.*
 
 class TaskProcessor {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -14,13 +12,15 @@ class TaskProcessor {
     suspend fun process(
         task: Task,
         isProcessingAllowedFlow: StateFlow<Boolean>,
-        onWaitComplete: (task: Task) -> Unit = {}
+        onWaitComplete: (task: Task) -> Unit,
+        onTaskStateChange: (task: Task) -> Unit = {}
     ): State {
-        task.requireReadyOrSuspended()
+        task.requireReadyState()
         task.onStartProcessing()
+        onTaskStateChange(task)
 
-        if (task is ExtendedTask && !task.isWaitCompleted) {
-            coroutineScope {
+        if (task is ExtendedTask && task.waitTime != null && !task.isWaitCompleted) {
+            withContext(Dispatchers.Default) {
                 launch { task.wait() }
             }.invokeOnCompletion {
                 onWaitComplete(task)
@@ -42,22 +42,21 @@ class TaskProcessor {
     }
 
     private fun Task.onStartProcessing() {
-        logger.atInfo().log("Start processing task: ${this.uuid}, ${this.state}")
-        if (this.state == SUSPENDED) this.tryMakeAction(ACTIVATE)
+        logger.atInfo().log("Start processing task: $this")
         this.tryMakeAction(START)
     }
 
-    private fun Task.requireReadyOrSuspended() {
-        if (this.state != SUSPENDED && this.state != READY) {
-            throw LogicException("Task is not in SUSPENDED or READY state", TASK_CANNOT_BE_PROCESSED).withLog(logger)
+    private fun Task.requireReadyState() {
+        if (this.state != READY) {
+            throw LogicException("Task is not in READY state", TASK_CANNOT_BE_PROCESSED).withLog(logger)
         }
     }
 
     private fun handleInterruption(task: Task, processTime: Long) {
-        logger.atInfo().log("Interrupted while processing task: ${task.uuid}, ${task.state}")
+        logger.atInfo().log("Interrupted while processing task:$task, processTime:$processTime")
         task.commitProcessTime(processTime)
         task.tryMakeAction(PREEMPT)
-        logger.atInfo().log("Task: ${task.uuid} is now in ${task.state} state")
+        logger.atInfo().log("Task: $task is now in ${task.state} state")
     }
 
     private fun handleFinishProcess(task: Task, processTime: Long) {

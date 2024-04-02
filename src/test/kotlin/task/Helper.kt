@@ -1,18 +1,26 @@
 package task
 
-import org.junit.jupiter.api.Test
 import ExtendedTask
 import Task
-import Task.Action.*
-import Task.State.*
+import Task.Action.ACTIVATE
+import Task.Action.START
+import Task.State.RUNNING
+import Task.State.SUSPENDED
 import generateUuid
+import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
-fun getTaskInReadyState() = Task(generateUuid()).apply { tryMakeAction(ACTIVATE) }
-fun getTaskInRunningState() = getTaskInReadyState().apply { tryMakeAction(START) }
+fun getTaskInReadyState(timeToProcess: Long = 1000L) =
+    Task(generateUuid(), timeToProcess).apply { tryMakeAction(ACTIVATE) }
 
-fun getExtendedTaskInReadyState(waitTime: Long? = null) = ExtendedTask(generateUuid(), waitTime = waitTime).apply { tryMakeAction(ACTIVATE) }
-fun getExtendedTaskInRunningState(waitTime: Long? = null) = getExtendedTaskInReadyState(waitTime).apply { tryMakeAction(START) }
+fun getTaskInRunningState(timeToProcess: Long = 1000L) =
+    getTaskInReadyState(timeToProcess).apply { tryMakeAction(START) }
+
+fun getExtendedTaskInReadyState(waitTime: Long? = null, timeToProcess: Long = 1000L) =
+    ExtendedTask(generateUuid(), timeToProcess, waitTime).apply { tryMakeAction(ACTIVATE) }
+
+fun getExtendedTaskInRunningState(waitTime: Long? = null, timeToProcess: Long = 1000L) =
+    getExtendedTaskInReadyState(waitTime, timeToProcess).apply { tryMakeAction(START) }
 
 class HelperTest {
     @Test

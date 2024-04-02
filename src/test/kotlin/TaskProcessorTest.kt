@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import Task.State.*
+import task.getExtendedTaskInReadyState
 import task.getTaskInReadyState
 import task.getTaskInRunningState
 import kotlin.test.Test
@@ -19,9 +20,9 @@ class TaskProcessorTest {
     @Test
     fun `processes one task`() {
         val processor = TaskProcessor()
-        val task = Task(generateUuid(), timeToProcess = 3)
+        val task = getTaskInReadyState(timeToProcess = 3)
         assertEquals(0, task.processedTime)
-        val taskState = runBlocking { processor.process(task, noInterruptionsFlow) }
+        val taskState = runBlocking { processor.process(task, noInterruptionsFlow, {}) }
 
         assertEquals(task.timeToProcess, task.processedTime)
         assertEquals(SUSPENDED, taskState)
@@ -30,11 +31,11 @@ class TaskProcessorTest {
     @Test
     fun `try process task and get interrupted`(): Unit = runBlocking {
         val processor = TaskProcessor()
-        val task = Task(generateUuid(), timeToProcess = 100)
+        val task = getTaskInReadyState(timeToProcess = 100)
         assertEquals(0, task.processedTime)
         val withInterruptionFlow = MutableStateFlow(true)
 
-        val deferred = async { processor.process(task, withInterruptionFlow) }
+        val deferred = async { processor.process(task, withInterruptionFlow, {}) }
         delay(1)
         withInterruptionFlow.value = false
         deferred.await()
@@ -46,11 +47,11 @@ class TaskProcessorTest {
     @Test
     fun `processes extended task with should wait trait`(): Unit = runBlocking {
         val processor = TaskProcessor()
-        val task = ExtendedTask(generateUuid(), timeToProcess = 10, waitTime = 100)
+        val task = getExtendedTaskInReadyState(timeToProcess = 10, waitTime = 100)
         assertEquals(0, task.processedTime)
         var hasWaited = false
 
-        launch { processor.process(task, noInterruptionsFlow) {
+        launch { processor.process(task, noInterruptionsFlow, {}) {
             hasWaited = true
         } }
         delay(10)
@@ -67,25 +68,25 @@ class TaskProcessorTest {
     }
 
     @Test
-    fun `processes only tasks in SUSPENDED or READY states`() {
+    fun `processes only tasks in READY states`() {
         val processor = TaskProcessor()
         val eventFlow = MutableStateFlow(true)
 
-        var task = Task(generateUuid(), timeToProcess = 3)
-        assertEquals(SUSPENDED, task.state)
-        assertDoesNotThrow {
-            runBlocking { processor.process(task, eventFlow) }
-        }
-
-        task = getTaskInReadyState()
+        var task = getTaskInReadyState()
         assertEquals(READY, task.state)
         assertDoesNotThrow {
-            runBlocking { processor.process(task, eventFlow) }
+            runBlocking { processor.process(task, eventFlow, {}) }
+        }
+
+        task = Task(generateUuid(), timeToProcess = 3)
+        assertEquals(SUSPENDED, task.state)
+        assertThrows<LogicException> {
+            runBlocking { processor.process(task, eventFlow, {}) }
         }
 
         task = getTaskInRunningState()
         assertThrows<LogicException> {
-            runBlocking { processor.process(task, eventFlow) }
+            runBlocking { processor.process(task, eventFlow, {}) }
         }
     }
 }

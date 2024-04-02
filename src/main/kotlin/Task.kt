@@ -1,9 +1,12 @@
-import org.slf4j.LoggerFactory
 import LogicExceptionType.ILLEGAL_TRANSITION
 import Task.Action.*
 import Task.State.*
+import org.slf4j.LoggerFactory
 
-open class Task(open val uuid: String, open val timeToProcess: Long = 1000) {
+open class Task(
+    val uuid: String,
+    val timeToProcess: Long = 100
+) {
     protected val logger = LoggerFactory.getLogger(javaClass)
 
     private var _processedTime: Long = 0
@@ -34,6 +37,8 @@ open class Task(open val uuid: String, open val timeToProcess: Long = 1000) {
         _processedTime += time
     }
 
+    override fun equals(other: Any?): Boolean = (other as? Task)?.uuid == uuid
+
     enum class Action {
         START,
         TERMINATE,
@@ -47,6 +52,18 @@ open class Task(open val uuid: String, open val timeToProcess: Long = 1000) {
         SUSPENDED,
         WAITING,
     }
+
+    override fun toString(): String = "[$commonStringAttributes]"
+    override fun hashCode(): Int {
+        var result = uuid.hashCode()
+        result = 31 * result + _processedTime.hashCode()
+        result = 31 * result + _state.hashCode()
+        return result
+    }
+
+    protected val commonStringAttributes: String
+        get() = "Type:${this.javaClass.name} UUID:$uuid State:$state ProcessedTime:$processedTime"
+
 
     companion object {
         private val INITIAL_STATE = SUSPENDED
