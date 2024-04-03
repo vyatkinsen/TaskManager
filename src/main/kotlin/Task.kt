@@ -28,7 +28,7 @@ open class Task(
             (action == PREEMPT) && (state == RUNNING) -> READY
             (action == TERMINATE) && (state == RUNNING) -> SUSPENDED
             else -> throw LogicException(
-                message = "Transition from state $state on action $action is not allowed",
+                message = "Transition from state $state on action $action is not allowed, UUID:$uuid",
                 type = ILLEGAL_TRANSITION,
             ).withLog(logger)
         }
@@ -62,7 +62,7 @@ open class Task(
     }
 
     protected val commonStringAttributes: String
-        get() = "Type:${this.javaClass.name} UUID:$uuid State:$state ProcessedTime:$processedTime"
+        get() = "Type:${this.javaClass.name} UUID:$uuid State:$state Time:$processedTime/$timeToProcess "
 
 
     companion object {

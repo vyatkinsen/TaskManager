@@ -112,7 +112,12 @@ class MessageQueue {
         val midQueue: ArrayDeque<Task>,
         val highQueue: ArrayDeque<Task>
     ) {
-        //todo fun toImmutableState() =
+        fun toSnapshot() = QueuePool(
+            lowestQueue = ArrayDeque<Task>().apply { addAll(lowestQueue) },
+            lowQueue = ArrayDeque<Task>().apply { addAll(lowQueue) },
+            midQueue = ArrayDeque<Task>().apply { addAll(midQueue) },
+            highQueue = ArrayDeque<Task>().apply { addAll(highQueue) },
+        )
 
         fun toColoredString(): String {
             val infoColor = Color(255, 200, 255)
@@ -151,7 +156,7 @@ class MessageQueue {
                 READY to Color(100, 255, 100),
                 RUNNING to Color(150, 150, 255),
                 SUSPENDED to Color(255, 170, 100),
-                WAITING to Color(255, 100, 100)
+                WAITING to Color(255, 255, 100)
             )
 
             private fun String.withColor(r: Int, g: Int, b: Int) =

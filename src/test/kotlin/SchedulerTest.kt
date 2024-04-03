@@ -1,10 +1,19 @@
-import Task.State.*
+import ExtendedTask.ExtendedAction.RELEASE
+import ExtendedTask.ExtendedAction.WAIT
+import Priority.*
+import Task.Action.*
+import Task.State.READY
+import Task.State.SUSPENDED
+import io.mockk.coJustAwait
+import io.mockk.coVerifyOrder
 import io.mockk.spyk
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import org.apache.logging.log4j.spi.LoggerContextFactory
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import kotlin.test.assertEquals
 
 class SchedulerTest {
@@ -18,15 +27,52 @@ class SchedulerTest {
             scheduler.run()
         }
 
+        val task1 = spyk(Task(generateUuid(), timeToProcess = 1))
+        val task2 = spyk(Task(generateUuid(), timeToProcess = 1))
+        mq.addTask(task1, LOWEST)
+        mq.addTask(task2, HIGH)
+        coVerifyOrder {
+            task1.tryMakeAction(ACTIVATE)
+            task1.tryMakeAction(START)
+            task1.tryMakeAction(PREEMPT)
+            task2.tryMakeAction(ACTIVATE)
+            task2.tryMakeAction(START)
+        }
+        coJustAwait {
+            task2.tryMakeAction(TERMINATE)
+            task1.tryMakeAction(START)
+        }.coAndThen {
+            coVerifyOrder {
+                task2.tryMakeAction(TERMINATE)
+                task1.tryMakeAction(START)
+                task1.tryMakeAction(TERMINATE)
+            }
+            callOriginal()
+        }
+
+        job1.cancel()
+    }
+
+    @Test
+    fun `getting lower priority task does not interrupt current`(): Unit = runBlocking {
+        val mq = MessageQueue()
+        val taskProcessor = TaskProcessor()
+        val scheduler = Scheduler(mq, taskProcessor)
+
+        val job1 = launch {
+            scheduler.run()
+        }
+
         launch {
-            val task1 = Task(generateUuid(), timeToProcess = 1)
-            val task2 = Task(generateUuid(), timeToProcess = 1)
-            mq.addTask(task1, Priority.LOWEST)
-            mq.addTask(task2, Priority.HIGH)
+            val task1 = Task(generateUuid(), timeToProcess = 1000)
+            val task2 = Task(generateUuid(), timeToProcess = 1000)
+            mq.addTask(task2, HIGH)
+            mq.addTask(task1, LOWEST)
 
             while (mq.completedTasks.size != 2) {
                 delay(1)
             }
+
             assertEquals(mq.completedTasks[0], task2)
             assertEquals(mq.completedTasks[1], task1)
             job1.cancel()
@@ -42,48 +88,54 @@ class SchedulerTest {
         val job1 = launch {
             scheduler.run()
         }
-
+        val waitTime = 100L
+        val task = spyk(ExtendedTask(generateUuid(), timeToProcess = 1, waitTime = waitTime))
         val stateList = mutableListOf(SUSPENDED, READY).iterator()
-        val job2 = launch {
-            val task = ExtendedTask(generateUuid(), timeToProcess = 1, waitTime = 10)
-            mq.addTask(task, Priority.LOWEST)
-            mq.queueStateFlow.collect { queuePool ->
-                queuePool.lowestQueue.firstOrNull()?.state?.let {
-                    assertEquals(stateList.next(), it)
-                }
-            }
+        mq.addTask(task, LOWEST)
+
+
+        coVerifyOrder {
+            task.tryMakeAction(ACTIVATE)
+            task.tryMakeAction(START)
         }
-        launch {
-            while (!(mq.completedTasks.size == 1 && mq.queueStateFlow.first().lowestQueue.size == 0)) {
-                delay(1)
+        coJustAwait {
+            task.tryMakeExtendedAction(WAIT)
+            task.tryMakeExtendedAction(RELEASE)
+        }.coAndThen {
+            coVerifyOrder {
+                task.tryMakeExtendedAction(RELEASE)
+                task.tryMakeAction(START)
+                task.tryMakeAction(TERMINATE)
             }
-            assertEquals(null, mq.queueStateFlow.first().lowestQueue.firstOrNull())
-            job1.cancel()
-            job2.cancel()
+            callOriginal()
         }
+
+        job1.cancel()
     }
 
     @Test
     fun `completes random tasks with random priorities`(): Unit = runBlocking {
+
         val mq = MessageQueue()
         val taskProcessor = TaskProcessor()
+        val cycles = 1000
         val producer = TaskProducer(
             mq,
-            activeCycles = 20,
+            activeCycles = cycles,
             minTaskDuration = 1,
             maxTaskDuration = 10,
             cycleDelay = 10
         )
         val scheduler = Scheduler(mq, taskProcessor)
 
-        val job1 = launch {
+        val job1 = launch(Dispatchers.Default) {
             scheduler.run()
         }
         val job2 = launch {
             producer.generateTasks()
         }
 
-        while (mq.completedTasks.size != 60) {
+        while (mq.completedTasks.size != cycles * 3) {
             delay(1)
         }
         job1.cancel()
