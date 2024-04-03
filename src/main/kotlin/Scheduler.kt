@@ -16,9 +16,9 @@ class Scheduler(
         }
 
     private var currentTask: Task? = null
-    private var runningJob = MutableStateFlow<Job?>(null)
+    private var runningJob:Job? = null
 
-    val globalScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val globalScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun run() = withContext(Dispatchers.Default) {
         launch {
@@ -86,40 +86,34 @@ class Scheduler(
                     }"
                 )
             }
-            when (newProcessTask.state) {
-                SUSPENDED -> {
-                    handleTaskCompletion(newProcessTask)
-                    return@invokeOnCompletion
-                }
-
-                WAITING -> {
-                    logger.atInfo().log("Handling WAITING state on task:$newProcessTask")
-                    globalScope.launch {
-                        (newProcessTask as ExtendedTask).wait(
-                            beforeDelay = {
-                                logger.atInfo()
-                                    .log(
-                                        "Task: $it changed state, ${
-                                            mq.queueStateFlow.first().toColoredString()
-                                        }"
-                                    )
-                            }
-                        )
-                        logger.atInfo().log("Wait for task:$newProcessTask completed")
-
-                        mq.onTaskRelease(newProcessTask)
-                    }
-                    logger.atInfo().log("Current task is now null")
-                    runBlocking {
-                        emmitNextTask(mq.queueStateFlow.first())
-                    }
-                    return@invokeOnCompletion
-                }
-
-                else -> {
-                    // do nothing
-                }
+            if (newProcessTask.state == SUSPENDED) {
+                handleTaskCompletion(newProcessTask)
+                return@invokeOnCompletion
             }
+            if (newProcessTask.state == WAITING) {
+                logger.atInfo().log("Handling WAITING state on task:$newProcessTask")
+                globalScope.launch {
+                    (newProcessTask as ExtendedTask).wait(
+                        beforeDelay = {
+                            logger.atInfo()
+                                .log(
+                                    "Task: $it changed state, ${
+                                        mq.queueStateFlow.first().toColoredString()
+                                    }"
+                                )
+                        }
+                    )
+                    logger.atInfo().log("Wait for task:$newProcessTask completed")
+
+                    mq.onTaskRelease(newProcessTask)
+                }
+                logger.atInfo().log("Current task is now null")
+                runBlocking {
+                    emmitNextTask(mq.queueStateFlow.first())
+                }
+                return@invokeOnCompletion
+            }
+
             if (it != null && it is CancellationException) {
                 logger.atInfo()
                     .log("Interrupted processing task UUID:${newProcessTask.uuid}, processTime took ${newProcessTask.timeToProcess} ms")
@@ -127,13 +121,11 @@ class Scheduler(
             }
         }
 
-        runningJob.value = job
+        runningJob = job
     }
 
     private fun handleTaskCompletion(task: Task) {
-        logger.atInfo()
-            .log("Terminating last processed task:[$task], currentJob = $currentTask")
-//        currentTaskFlow.tryEmit(null)
+        logger.atInfo().log("Terminating last processed task:[$task], currentJob = $currentTask")
         mq.terminateTask(task)
     }
 
@@ -146,7 +138,7 @@ class Scheduler(
     private suspend fun interruptCurrentJob() {
         if (currentTask != null) {
             logger.atInfo().log("Interrupting current processing:$currentTask")
-            runBlocking { runningJob.value?.cancelAndJoin() }
+            runBlocking { runningJob?.cancelAndJoin() }
         }
     }
 
