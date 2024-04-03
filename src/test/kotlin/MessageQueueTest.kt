@@ -26,25 +26,6 @@ class MessageQueueTest {
         assertEquals(2, state.highQueue.size)
     }
 
-//    @Test
-//    fun `emits updates`(): Unit = runBlocking {
-//        val mq = MessageQueue()
-//        println("\t\t${mq.queueStateFlow.value}")
-//
-//        launch {
-//            mq.queueStateFlow.collect {
-//                println("\t\t${it.lowestQueue.firstOrNull()}")
-//            }
-//        }
-//        launch {
-//            mq.addTask(Task(generateUuid()), LOWEST)
-//        }
-//        launch {
-//            delay(100)
-//            println("\t\t${mq.queueStateFlow.value}")
-//        }
-//    }
-
     @Test
     fun `can delete from specific queue`(): Unit = runBlocking {
         val mq = MessageQueue()

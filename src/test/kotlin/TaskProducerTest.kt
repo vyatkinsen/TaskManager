@@ -63,6 +63,4 @@ class TaskProducerTest {
         }
         return Triple(simpleTasksCount, extendedTaskWithoutWaitCount, extendedTaskWithWaitCount)
     }
-
-
 }

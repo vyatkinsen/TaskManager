@@ -16,7 +16,6 @@ class TaskProcessor {
     ): State {
         task.requireReadyState()
         task.onStartProcessing()
-
         task.onTaskStateChange(onTaskStateChangeLoggerMessage.invoke())
 
         if (task is ExtendedTask && task.waitTime != null && !task.isWaitCompleted) {
@@ -79,7 +78,7 @@ class TaskProcessor {
                         "Completing job, UUID:${task.uuid} state=${task.state}, timeToProcess:${task.timeToProcess}, processedTime:${task.processedTime}, error=$it, ${onTaskStateChangeLoggerMessage.invoke()}"
                     )
                 }
-                if (task.state == SUSPENDED) {
+                if (task.state == SUSPENDED && task.processedTime == task.timeToProcess) {
                     onTaskCompletion(task)
                     return@invokeOnCompletion
                 }

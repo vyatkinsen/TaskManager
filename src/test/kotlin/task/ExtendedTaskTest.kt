@@ -1,5 +1,6 @@
 package task
 
+import ExtendedTask.ExtendedAction.WAIT
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -9,22 +10,22 @@ import Task.State.*
 import kotlin.test.assertEquals
 
 class ExtendedTaskTransitionTest {
-    // EXTENDED
     @Test
     fun `can wait and then release`() {
         // what
-        val task = getExtendedTaskInRunningState(waitTime = 10)
-        assertEquals(RUNNING, task.state)
+        val waitTime = 10L
+        val task = getExtendedTaskInRunningState(waitTime = waitTime)
+        task.tryMakeExtendedAction(WAIT)
+        assertEquals(WAITING, task.state)
 
         // when
         runBlocking {
-            launch { task.wait {} }
+            var time: Long? = null
             launch {
-                delay(1)
-                assertEquals(WAITING, task.state)
-                delay(10)
+                task.wait { time = System.currentTimeMillis() }
                 assertEquals(READY, task.state)
                 assertTrue(task.isWaitCompleted)
+                assertTrue(System.currentTimeMillis() - time!! in (waitTime..2 * waitTime))
             }
         }
     }
