@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.awt.Color
-import java.lang.Exception
 
 
 class MessageQueue {
@@ -81,12 +80,6 @@ class MessageQueue {
         HIGH -> state.highQueue
     }
 
-    private fun ArrayDeque<Task>.withAddedTask(task: Task) =
-        ArrayDeque<Task>().apply {
-            addAll(this@withAddedTask)
-            addLast(task)
-        }
-
 
     private fun ArrayDeque<Task>.terminateTask(task: Task) = this.apply {
         val result = remove(task)
@@ -96,29 +89,12 @@ class MessageQueue {
         )
     }
 
-    private fun ArrayDeque<Task>.withTaskReleased(task: Task) = ArrayDeque<Task>().apply {
-        addAll(this@withTaskReleased)
-        if (task != firstOrNull()) {
-            throw LogicException("Task ${task.uuid} is not first in the queue", TASK_NOT_VALID).withLog(logger)
-        }
-
-        removeFirst()
-        addLast(task)
-    }
-
     data class QueuePool(
         val lowestQueue: ArrayDeque<Task>,
         val lowQueue: ArrayDeque<Task>,
         val midQueue: ArrayDeque<Task>,
         val highQueue: ArrayDeque<Task>
     ) {
-        fun toSnapshot() = QueuePool(
-            lowestQueue = ArrayDeque<Task>().apply { addAll(lowestQueue) },
-            lowQueue = ArrayDeque<Task>().apply { addAll(lowQueue) },
-            midQueue = ArrayDeque<Task>().apply { addAll(midQueue) },
-            highQueue = ArrayDeque<Task>().apply { addAll(highQueue) },
-        )
-
         fun toColoredString(): String {
             val infoColor = Color(255, 200, 255)
             val charOffset = "\t\t"
@@ -144,7 +120,7 @@ class MessageQueue {
                     append("}\t".withColor(QUEUE_COLOR))
                 }
                 return sb.toString()
-            } catch (e:Exception) {
+            } catch (e: Exception) {
                 return "ERROR WHILE COMPOSING"
             }
         }

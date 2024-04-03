@@ -2,7 +2,6 @@ import Task.State.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.assertDoesNotThrow
@@ -15,14 +14,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TaskProcessorTest {
-    private val noInterruptionsFlow = MutableStateFlow(true)
-
     @Test
     fun `processes one task`(): Unit = runBlocking {
         val processor = TaskProcessor()
         val task = getTaskInReadyState(timeToProcess = 3)
         assertEquals(0, task.processedTime)
-        val taskState = processor.process(task)
+        val taskState = processor.process(task, { "" })
 
         assertEquals(task.timeToProcess, task.processedTime)
         assertEquals(SUSPENDED, taskState)
@@ -35,7 +32,7 @@ class TaskProcessorTest {
         assertEquals(0, task.processedTime)
         val withInterruptionFlow = MutableStateFlow(true)
 
-        val deferred = async { processor.process(task) }
+        val deferred = async { processor.process(task, { "" }) }
         delay(1)
         withInterruptionFlow.value = false
         deferred.await()
@@ -50,7 +47,7 @@ class TaskProcessorTest {
         val task = getExtendedTaskInReadyState(timeToProcess = 10, waitTime = 100)
         assertEquals(0, task.processedTime)
 
-        val state = processor.process(task)
+        val state = processor.process(task, { "" })
         assertEquals(WAITING, state)
         assertEquals(0, task.processedTime)
         assertFalse(task.isWaitCompleted)
@@ -70,18 +67,18 @@ class TaskProcessorTest {
         var task = getTaskInReadyState()
         assertEquals(READY, task.state)
         assertDoesNotThrow {
-            runBlocking { processor.process(task) }
+            runBlocking { processor.process(task, { "" }) }
         }
 
         task = Task(generateUuid(), timeToProcess = 3)
         assertEquals(SUSPENDED, task.state)
         assertThrows<LogicException> {
-            runBlocking { processor.process(task) }
+            runBlocking { processor.process(task, { "" }) }
         }
 
         task = getTaskInRunningState()
         assertThrows<LogicException> {
-            runBlocking { processor.process(task) }
+            runBlocking { processor.process(task, { "" }) }
         }
     }
 }

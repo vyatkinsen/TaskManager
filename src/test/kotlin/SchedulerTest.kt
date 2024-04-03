@@ -1,6 +1,7 @@
 import ExtendedTask.ExtendedAction.RELEASE
 import ExtendedTask.ExtendedAction.WAIT
-import Priority.*
+import Priority.HIGH
+import Priority.LOWEST
 import Task.Action.*
 import Task.State.READY
 import Task.State.SUSPENDED
@@ -11,10 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import org.apache.logging.log4j.spi.LoggerContextFactory
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import kotlin.test.assertEquals
+
 
 class SchedulerTest {
     @Test
@@ -115,7 +115,6 @@ class SchedulerTest {
 
     @Test
     fun `completes random tasks with random priorities`(): Unit = runBlocking {
-
         val mq = MessageQueue()
         val taskProcessor = TaskProcessor()
         val cycles = 1000
