@@ -48,7 +48,10 @@ class Scheduler(
 
     private suspend fun handleOnNewHighestPriority() {
         highestPriorityTaskFlow.filterNotNull().collect { newProcessTask ->
-            if (currentTask?.uuid != newProcessTask.uuid && (newProcessTask.state == READY || newProcessTask.state == SUSPENDED)) {
+            if (currentTask?.uuid != newProcessTask.uuid ||
+                currentTask?.state == READY &&
+                (currentTask as? ExtendedTask)?.isWaitCompleted == true
+            ) {
                 logger.atWarn().log(
                     "Processor should run new task:$newProcessTask, currently processing:${currentTask}"
                 )
@@ -71,7 +74,7 @@ class Scheduler(
             onTaskCompletion = { handleTaskCompletion(it) },
             onTaskRelease = { mq.onTaskRelease(newProcessTask) },
             onWaitingStateProcessed = {
-                currentTask = null
+//                currentTask = null
                 emmitNextTask(mq.queueStateFlow.first())
             }
         )

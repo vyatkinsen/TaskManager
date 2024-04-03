@@ -86,7 +86,7 @@ class SchedulerTest {
     fun `completes random tasks with random priorities`(): Unit = runBlocking {
         val mq = MessageQueue()
         val taskProcessor = TaskProcessor()
-        val cycles = 10
+        val cycles = 1000
         val producer = TaskProducer(
             mq,
             activeCycles = cycles,
