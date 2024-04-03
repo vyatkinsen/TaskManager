@@ -70,7 +70,10 @@ class Scheduler(
             onTaskStateChangeLoggerMessage = { mq.queueStateFlow.first().toColoredString() },
             onTaskCompletion = { handleTaskCompletion(it) },
             onTaskRelease = { mq.onTaskRelease(newProcessTask) },
-            onWaitingStateProcessed = { emmitNextTask(mq.queueStateFlow.first()) }
+            onWaitingStateProcessed = {
+                currentTask = null
+                emmitNextTask(mq.queueStateFlow.first())
+            }
         )
     }
 
