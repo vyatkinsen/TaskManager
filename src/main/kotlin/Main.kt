@@ -1,39 +1,49 @@
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import org.slf4j.LoggerFactory
 
 fun main() {
-    val logger = LoggerFactory.getLogger("HHHHHH")
-    logger.atInfo().log("hello")
+    val globalScope = CoroutineScope(Dispatchers.IO)
+    var job: Job? = null
 
     runBlocking {
-        val _stateFlow = MutableStateFlow(
-            MessageQueue.QueuePool(
-                ArrayDeque(),
-                ArrayDeque(),
-                ArrayDeque(),
-                ArrayDeque(),
-            ))
-        val stateFlow = _stateFlow.asStateFlow()
         launch {
-            repeat(10) {
-                val task = Task("1")
-                val oldState = stateFlow.value
-                val newState = stateFlow.value.copy(
-                    lowestQueue = ArrayDeque<Task>().apply { add(task) }
-                )
-                println(oldState == newState)
+            var deferred = MutableStateFlow<Deferred<Int>?>(null)
+            var state = 0
+            val currentJob = globalScope.launch {
+                delay(1000)
+                println("HI")
+            }
+            currentJob.invokeOnCompletion {
+                println("Completed")
+            }
+            job = currentJob
+            println("ME first")
+        }
+        launch {
+            delay(500)
+            job!!.cancel()
+        }
 
-                _stateFlow.value = newState
-                delay(500)
-            }
-        }
-        launch {
-            stateFlow.collect {
-                println(it)
-            }
-        }
+
+
+
+//        withContext(this.coroutineContext) {
+//            deferred.value = async {
+//                repeat(1000) {
+//                    state++
+//                    delay(1)
+//                }
+//
+//                return@async 2
+//            }.apply {
+//                invokeOnCompletion {
+//                    println("Im Cancelled, $it, state=$state")
+//                }
+//            }
+//        }
+//        launch {
+//            delay(100)
+//            deferred.value?.cancel()
+//        }
     }
 }
-

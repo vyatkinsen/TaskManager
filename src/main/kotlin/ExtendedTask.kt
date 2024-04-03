@@ -10,7 +10,7 @@ class ExtendedTask(
     timeToProcess: Long = 100,
     val waitTime: Long? = null
 ) : Task(uuid, timeToProcess) {
-    var _isWaitCompleted = false
+    private var _isWaitCompleted = false
     val isWaitCompleted: Boolean
         get() = _isWaitCompleted
 
@@ -25,7 +25,7 @@ class ExtendedTask(
         }
     }
 
-    suspend fun wait(beforeDelay: suspend (task: Task) -> Unit) {
+    suspend fun wait(beforeDelay: suspend (task: Task) -> Unit = {}) {
         if (waitTime == null) throw LogicException("Cannot wait without waitTime", WAIT_IS_NOT_ALLOWED).withLog(logger)
 
         tryMakeExtendedAction(WAIT)

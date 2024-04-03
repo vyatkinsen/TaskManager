@@ -18,11 +18,11 @@ class TaskProcessorTest {
     private val noInterruptionsFlow = MutableStateFlow(true)
 
     @Test
-    fun `processes one task`() {
+    fun `processes one task`(): Unit = runBlocking {
         val processor = TaskProcessor()
         val task = getTaskInReadyState(timeToProcess = 3)
         assertEquals(0, task.processedTime)
-        val taskState = runBlocking { processor.process(task, noInterruptionsFlow, {}) }
+        val taskState = processor.process(task)
 
         assertEquals(task.timeToProcess, task.processedTime)
         assertEquals(SUSPENDED, taskState)
@@ -35,7 +35,7 @@ class TaskProcessorTest {
         assertEquals(0, task.processedTime)
         val withInterruptionFlow = MutableStateFlow(true)
 
-        val deferred = async { processor.process(task, withInterruptionFlow, {}) }
+        val deferred = async { processor.process(task) }
         delay(1)
         withInterruptionFlow.value = false
         deferred.await()
@@ -49,25 +49,17 @@ class TaskProcessorTest {
         val processor = TaskProcessor()
         val task = getExtendedTaskInReadyState(timeToProcess = 10, waitTime = 100)
         assertEquals(0, task.processedTime)
-        var hasWaited = false
 
-        launch {
-            processor.process(
-                task,
-                noInterruptionsFlow,
-            )
-        }
-        delay(50)
-
-        assertEquals(WAITING, task.state)
+        val state = processor.process(task)
+        assertEquals(WAITING, state)
         assertEquals(0, task.processedTime)
-        assertFalse(hasWaited)
+        assertFalse(task.isWaitCompleted)
 
-        delay(100)
+        task.wait()
 
         assertEquals(READY, task.state)
         assertEquals(0, task.processedTime)
-        assertTrue(hasWaited)
+        assertTrue(task.isWaitCompleted)
     }
 
     @Test
@@ -78,18 +70,18 @@ class TaskProcessorTest {
         var task = getTaskInReadyState()
         assertEquals(READY, task.state)
         assertDoesNotThrow {
-            runBlocking { processor.process(task, eventFlow, {}) }
+            runBlocking { processor.process(task) }
         }
 
         task = Task(generateUuid(), timeToProcess = 3)
         assertEquals(SUSPENDED, task.state)
         assertThrows<LogicException> {
-            runBlocking { processor.process(task, eventFlow, {}) }
+            runBlocking { processor.process(task) }
         }
 
         task = getTaskInRunningState()
         assertThrows<LogicException> {
-            runBlocking { processor.process(task, eventFlow, {}) }
+            runBlocking { processor.process(task) }
         }
     }
 }

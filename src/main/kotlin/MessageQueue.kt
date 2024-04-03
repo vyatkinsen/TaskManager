@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import java.awt.Color
+import java.lang.Exception
 
 
 class MessageQueue {
@@ -26,6 +27,7 @@ class MessageQueue {
         ArrayDeque(),
         ArrayDeque()
     )
+
     private val _queueStateFlow =
         MutableSharedFlow<QueuePool>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val queueStateFlow = _queueStateFlow.asSharedFlow()
@@ -52,6 +54,7 @@ class MessageQueue {
             val priority = taskToPriorityMap[task.uuid]
                 ?: throw LogicException("Task UUID:${task.uuid} not found", TASK_NOT_FOUND).withLog(logger)
             getQueueByPriority(priority).terminateTask(task)
+            _completedTasks.add(task)
             runBlocking { _queueStateFlow.emit(state) }
             logger.atInfo().log(
                 "Removed task, UUID:${task.uuid}, PRIORITY:$priority, ${state.toColoredString()}"
@@ -86,14 +89,11 @@ class MessageQueue {
 
 
     private fun ArrayDeque<Task>.terminateTask(task: Task) = this.apply {
-
-
         val result = remove(task)
         if (!result) throw LogicException(
             "Task ${task.uuid} could not be removed",
             TASK_NOT_VALID
         )
-        _completedTasks.add(task)
     }
 
     private fun ArrayDeque<Task>.withTaskReleased(task: Task) = ArrayDeque<Task>().apply {
@@ -112,30 +112,36 @@ class MessageQueue {
         val midQueue: ArrayDeque<Task>,
         val highQueue: ArrayDeque<Task>
     ) {
+        //todo fun toImmutableState() =
+
         fun toColoredString(): String {
             val infoColor = Color(255, 200, 255)
+            val charOffset = "\t\t"
             val sb = StringBuilder()
                 .appendLine()
-                .append("\t\t")
-                .append("Message Queue:".withColor(infoColor))
-                .append(lowestQueue.toStringWithColors(LOWEST))
-                .append(lowQueue.toStringWithColors(LOW))
-                .append(midQueue.toStringWithColors(MID))
-                .append(highQueue.toStringWithColors(HIGH))
+                .appendLine(charOffset + "Message Queue:".withColor(infoColor))
+                .appendLine(charOffset + lowestQueue.toStringWithColors(LOWEST))
+                .appendLine(charOffset + lowQueue.toStringWithColors(LOW))
+                .appendLine(charOffset + midQueue.toStringWithColors(MID))
+                .appendLine(charOffset + highQueue.toStringWithColors(HIGH))
             return sb.toString()
         }
 
         private fun ArrayDeque<Task>.toStringWithColors(priority: Priority): String {
-            val sb = StringBuilder().apply {
-                append("QUEUE $priority:{".withColor(QUEUE_COLOR))
-                val tasksList = mutableListOf<String>()
-                this@toStringWithColors.forEach { task ->
-                    tasksList.add("$task".withColor(STATE_TO_COLOR_MAP[task.state]!!))
+            try {
+                val sb = StringBuilder().apply {
+                    append("QUEUE $priority:{".withColor(QUEUE_COLOR))
+                    val tasksList = mutableListOf<String>()
+                    this@toStringWithColors.forEach { task ->
+                        tasksList.add("$task".withColor(STATE_TO_COLOR_MAP[task.state]!!))
+                    }
+                    append(tasksList.joinToString(", "))
+                    append("}\t".withColor(QUEUE_COLOR))
                 }
-                append(tasksList.joinToString(", "))
-                append("}\t".withColor(QUEUE_COLOR))
+                return sb.toString()
+            } catch (e:Exception) {
+                return "ERROR WHILE COMPOSING"
             }
-            return sb.toString()
         }
 
         companion object {
@@ -143,7 +149,7 @@ class MessageQueue {
             private val QUEUE_COLOR = Color(200, 255, 255)
             private val STATE_TO_COLOR_MAP = mapOf(
                 READY to Color(100, 255, 100),
-                RUNNING to Color(100, 100, 255),
+                RUNNING to Color(150, 150, 255),
                 SUSPENDED to Color(255, 170, 100),
                 WAITING to Color(255, 100, 100)
             )
