@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 class TaskProcessor {
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    suspend fun process(
+    private suspend fun process(
         task: Task,
         onTaskStateChangeLoggerMessage: suspend () -> String,
     ): State {

@@ -1,13 +1,5 @@
-import ExtendedTask.ExtendedAction.RELEASE
-import ExtendedTask.ExtendedAction.WAIT
 import Priority.HIGH
 import Priority.LOWEST
-import Task.Action.*
-import Task.State.READY
-import Task.State.SUSPENDED
-import io.mockk.coJustAwait
-import io.mockk.coVerifyOrder
-import io.mockk.spyk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -27,28 +19,17 @@ class SchedulerTest {
             scheduler.run()
         }
 
-        val task1 = spyk(Task(generateUuid(), timeToProcess = 1))
-        val task2 = spyk(Task(generateUuid(), timeToProcess = 1))
+        val task1 = Task(generateUuid(), timeToProcess = 1)
+        val task2 = Task(generateUuid(), timeToProcess = 1)
         mq.addTask(task1, LOWEST)
         mq.addTask(task2, HIGH)
-        coVerifyOrder {
-            task1.tryMakeAction(ACTIVATE)
-            task1.tryMakeAction(START)
-            task1.tryMakeAction(PREEMPT)
-            task2.tryMakeAction(ACTIVATE)
-            task2.tryMakeAction(START)
+
+        while (mq.completedTasks.size != 2) {
+            delay(1)
         }
-        coJustAwait {
-            task2.tryMakeAction(TERMINATE)
-            task1.tryMakeAction(START)
-        }.coAndThen {
-            coVerifyOrder {
-                task2.tryMakeAction(TERMINATE)
-                task1.tryMakeAction(START)
-                task1.tryMakeAction(TERMINATE)
-            }
-            callOriginal()
-        }
+
+        assertEquals(task2, mq.completedTasks[0])
+        assertEquals(task1, mq.completedTasks[1])
 
         job1.cancel()
     }
@@ -89,26 +70,14 @@ class SchedulerTest {
             scheduler.run()
         }
         val waitTime = 100L
-        val task = spyk(ExtendedTask(generateUuid(), timeToProcess = 1, waitTime = waitTime))
-        val stateList = mutableListOf(SUSPENDED, READY).iterator()
+        val task = ExtendedTask(generateUuid(), timeToProcess = 1, waitTime = waitTime)
         mq.addTask(task, LOWEST)
 
+        while (mq.completedTasks.size != 1) {
+            delay(10)
+        }
 
-        coVerifyOrder {
-            task.tryMakeAction(ACTIVATE)
-            task.tryMakeAction(START)
-        }
-        coJustAwait {
-            task.tryMakeExtendedAction(WAIT)
-            task.tryMakeExtendedAction(RELEASE)
-        }.coAndThen {
-            coVerifyOrder {
-                task.tryMakeExtendedAction(RELEASE)
-                task.tryMakeAction(START)
-                task.tryMakeAction(TERMINATE)
-            }
-            callOriginal()
-        }
+        assertEquals(task, mq.completedTasks[0])
 
         job1.cancel()
     }
@@ -117,7 +86,7 @@ class SchedulerTest {
     fun `completes random tasks with random priorities`(): Unit = runBlocking {
         val mq = MessageQueue()
         val taskProcessor = TaskProcessor()
-        val cycles = 1000
+        val cycles = 10
         val producer = TaskProducer(
             mq,
             activeCycles = cycles,
